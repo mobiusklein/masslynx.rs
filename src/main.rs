@@ -17,7 +17,11 @@ fn main() -> Result<(), MassLynxError> {
     let mut reader = MassLynxReader::from_path(&path)?;
     eprintln!("Opened reader with {} spectra", reader.len());
 
-    let spec = reader.get_spectrum(spectrum_idx).unwrap();
+    // This may panic if the index is out of bounds
+    let spec = match reader.get_spectrum(spectrum_idx) {
+        Some(s) => s,
+        None => panic!("Index {} out of bounds for file {:?} with {} spectra", spectrum_idx, path, reader.len()),
+    };
     eprintln!("{:?}", spec);
 
     let (tic_time, tic_int) = reader.tic()?;
