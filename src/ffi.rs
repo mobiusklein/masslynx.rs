@@ -101,7 +101,6 @@ extern "stdcall" {
     ) -> c_int;
     pub fn getDriftTime(
         mlInfoReader: CMassLynxBaseReader,
-        nWhichFunction: c_int,
         nWhichDrift: c_int,
         fRT: *mut c_float,
     ) -> c_int;

@@ -239,7 +239,7 @@ impl MassLynxReader {
 
                 let drift_time = self
                     .info_reader
-                    .get_drift_time(entry.function, i as usize)
+                    .get_drift_time(i as usize)
                     .ok();
 
                 Spectrum::new(

@@ -457,13 +457,12 @@ impl MassLynxInfoReader {
 
     pub fn get_drift_time(
         &mut self,
-        which_function: usize,
         which_drift: usize,
     ) -> MassLynxResult<f64> {
         let mut out = 0.0;
 
         fficall!({
-            ffi::getDriftTime(self.0, which_function as c_int, which_drift as c_int, &mut out)
+            ffi::getDriftTime(self.0, which_drift as c_int, &mut out)
         });
 
         Ok(out as f64)
