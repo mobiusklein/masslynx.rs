@@ -257,8 +257,8 @@ impl MassLynxParameters {
     }
 
     pub fn set<T: AsMassLynxItemKey>(&mut self, key: T, value: String) -> MassLynxResult<()> {
-        let value_ptr = value.as_ptr();
-        let code = unsafe { ffi::setParameterValue(self.0, key.as_key(), value_ptr as *const i8) };
+        let value_ptr = CString::new(value).expect("Failed to convert value to C-compatible string");
+        let code = unsafe { ffi::setParameterValue(self.0, key.as_key(), value_ptr.as_ptr()) };
 
         if code != 0 {
             Err(Self::mass_lynx_error_for_code(code))
@@ -367,7 +367,7 @@ pub trait AsMassLynxSource: Default + MassLynxReaderHelper {
         let path_str = path.as_os_str();
         let s = path_str.as_encoded_bytes();
         // Ensure there's a trailing nul byte
-        let s = CString::new(s).unwrap();
+        let s = CString::new(s).expect("Failed to convert path to a C-compatible string");
         let mut this = Self::default();
         fficall!({
             ffi::createRawReaderFromPath(
@@ -695,7 +695,8 @@ impl MassLynxLockMassProcessor {
     }
 
     pub fn set_raw_data_from_path(&mut self, path: String) -> MassLynxResult<()> {
-        fficall!({ ffi::setRawPath(self.0, path.as_ptr() as *const i8) });
+        let cpath = CString::new(path).expect("Failed to convert path to C-compatible string");
+        fficall!({ ffi::setRawPath(self.0, cpath.as_ptr() as *const i8) });
         Ok(())
     }
 
