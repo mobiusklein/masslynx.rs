@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::ffi::{c_char, c_float, c_int, c_uint, c_void, CStr};
+use std::ffi::{c_char, c_float, c_int, c_uint, c_void, CStr, CString};
 use std::fmt::Display;
 use std::path::Path;
 use std::{mem, ptr};
@@ -366,10 +366,12 @@ pub trait AsMassLynxSource: Default + MassLynxReaderHelper {
         let path = path.as_ref();
         let path_str = path.as_os_str();
         let s = path_str.as_encoded_bytes();
+        // Ensure there's a trailing nul byte
+        let s = CString::new(s).unwrap();
         let mut this = Self::default();
         fficall!({
             ffi::createRawReaderFromPath(
-                s.as_ptr() as *const i8,
+                s.as_ptr(),
                 this.source_mut(),
                 Self::base_type(),
             )
