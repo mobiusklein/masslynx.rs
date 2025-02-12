@@ -1,12 +1,16 @@
 //! The higher-ish level API
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use crate::{
-    base::MassLynxChromatogramReader, AsMassLynxSource,
+    base::MassLynxChromatogramReader,
     constants::{LockMassParameter, MassLynxFunctionType, MassLynxIonMode},
-    MassLynxInfoReader, MassLynxLockMassProcessor, MassLynxParameters,
-    MassLynxResult, MassLynxScanReader,
+    AsMassLynxSource, MassLynxError, MassLynxInfoReader, MassLynxLockMassProcessor,
+    MassLynxParameters, MassLynxResult, MassLynxScanReader,
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -86,8 +90,74 @@ impl CycleIndexEntry {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq)]
+struct RawPaths {
+    base_path: PathBuf,
+    function_paths: HashMap<usize, PathBuf>,
+    chromatogram_paths: HashMap<usize, PathBuf>,
+}
+
+impl RawPaths {
+
+    fn function_has_cdt(&self, function: usize) -> bool {
+        self.function_paths
+            .get(&function)
+            .map(|p| p.with_extension("cdt").exists())
+            .unwrap_or_default()
+    }
+
+    fn from_path(base_path: PathBuf) -> io::Result<Self> {
+        let mut this = Self {
+            base_path,
+            ..Self::default()
+        };
+        this.build_from_base()?;
+        Ok(this)
+    }
+
+    fn build_from_base(&mut self) -> io::Result<()> {
+        let root = self.base_path.as_path();
+        let dirs = fs::read_dir(root)?;
+
+        let func_regex = regex::Regex::new(r"_func0*(\d+).dat").unwrap();
+        let chrom_regex = regex::Regex::new(r"_chro0*(\d+).dat").unwrap();
+
+        for member in dirs.flatten() {
+            if member.file_type()?.is_dir() {
+                continue;
+            }
+
+            let name = member.file_name().to_string_lossy().to_lowercase();
+            if name.starts_with("_func") && name.ends_with(".dat") {
+                if let Some(pat) = func_regex.captures(&name) {
+                    let func_num: usize =
+                        pat.get(1).unwrap().as_str().parse::<usize>().unwrap_or_else(|e| {
+                            panic!("Failed to parse function number from {name}: {e}")
+                        }).saturating_sub(1);
+                    self.function_paths.insert(func_num, member.path());
+                }
+            }
+            if name.starts_with("_chro") && name.ends_with(".dat") {
+                if let Some(pat) = chrom_regex.captures(&name) {
+                    let func_num: usize =
+                        pat.get(1).unwrap().as_str().parse::<usize>().unwrap_or_else(|e| {
+                            panic!("Failed to parse function number from {name}: {e}")
+                        }).saturating_sub(1);
+                    self.chromatogram_paths.insert(func_num, member.path());
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn path(&self) -> &PathBuf {
+        &self.base_path
+    }
+}
+
 pub struct MassLynxReader {
-    path: PathBuf,
+    path: RawPaths,
     scan_reader: MassLynxScanReader,
     info_reader: MassLynxInfoReader,
     chromatogram_reader: MassLynxChromatogramReader,
@@ -103,7 +173,11 @@ impl MassLynxReader {
         let chromatogram_reader = MassLynxChromatogramReader::from_source(&info_reader)?;
         let mut lockmass_processor = MassLynxLockMassProcessor::new()?;
         lockmass_processor.set_raw_data_from_reader(&scan_reader)?;
-        let path = PathBuf::from(path);
+
+        let path = RawPaths::from_path(PathBuf::from(path)).map_err(|e| MassLynxError {
+            error_code: 9999,
+            message: format!("Failed to build file name registry: {e}"),
+        })?;
 
         let mut this = Self {
             path,
@@ -120,7 +194,10 @@ impl MassLynxReader {
     }
 
     pub fn get_lock_mass_function(&self) -> Option<usize> {
-        self.info_reader.get_lock_mass_function().ok().map(|(_, func)| func)
+        self.info_reader
+            .get_lock_mass_function()
+            .ok()
+            .map(|(_, func)| func)
     }
 
     pub fn set_lock_mass(&mut self, mass: f32, tolerance: Option<f32>) -> MassLynxResult<()> {
@@ -171,7 +248,16 @@ impl MassLynxReader {
                 continue;
             }
             let scan_count = self.info_reader.scan_count_for_function(func)?;
-            let im_block_size = self.info_reader.get_drift_scan_count(func)?;
+            let im_block_size = if self.path.function_has_cdt(func) {
+                self
+                    .info_reader
+                    .get_drift_scan_count(func)
+                    .ok()
+                    .unwrap_or_default()
+            } else {
+                0
+            };
+
             for i in 0..scan_count {
                 let rt = self.info_reader.get_retention_time(func, i)?;
                 cycle_index.push(CycleIndexEntry::new(func, i, rt, im_block_size, 0));
@@ -204,7 +290,7 @@ impl MassLynxReader {
     }
 
     pub fn path(&self) -> &Path {
-        &self.path
+        &self.path.path()
     }
 
     pub fn block_index(&self) -> &[CycleIndexEntry] {
