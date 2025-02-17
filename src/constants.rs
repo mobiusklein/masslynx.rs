@@ -30,10 +30,15 @@ const SCAN_TYPE_BASE: u32 = 1850;
 const DDA_ISOLATION_WINDOW_PARAMETER_BASE: u32 = 1900;
 const DDA_PARAMETER_BASE: u32 = 1950;
 
-pub trait AsMassLynxItemKey: TryFrom<i32> + Copy + Debug {
+pub trait AsMassLynxItemKey: TryFrom<i32> + Copy + Debug + Eq + std::hash::Hash {
     fn as_key(&self) -> c_int;
 }
 
+impl AsMassLynxItemKey for i32 {
+    fn as_key(&self) -> c_int {
+        *self
+    }
+}
 
 macro_rules! impl_as_key {
     ($t:ty) => {
@@ -155,7 +160,7 @@ pub enum MassLynxFunctionType { // ProteoWizard classifications
     UNINITIALISED = FUNCTION_TYPE_BASE + 99,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum MassLynxHeaderItem {
     VERSION = HEADER_ITEM_BASE,
@@ -194,6 +199,14 @@ pub enum MassLynxHeaderItem {
     SPARE3 = 33 + HEADER_ITEM_BASE,
     SPARE4 = 34 + HEADER_ITEM_BASE,
     SPARE5 = 35 + HEADER_ITEM_BASE,
+}
+
+impl MassLynxHeaderItem {
+    pub fn iter() -> impl Iterator<Item = Self> {
+        (HEADER_ITEM_BASE..).map_while(|i| {
+            (i as i32).try_into().ok()
+        })
+    }
 }
 
 impl TryFrom<i32> for MassLynxHeaderItem {
@@ -242,7 +255,7 @@ impl TryFrom<i32> for MassLynxHeaderItem {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum MassLynxScanItem {
     LINEAR_DETECTOR_VOLTAGE = SCAN_ITEM_BASE,
@@ -428,7 +441,7 @@ impl TryFrom<i32> for MassLynxScanItem {
 }
 
 const FILE_NAME: u32 = 700;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum MassLynxSampleListItem {
     FILE_NAME = FILE_NAME,
@@ -683,7 +696,7 @@ impl TryFrom<i32> for MassLynxSampleListItem {
 impl_as_key!(MassLynxHeaderItem, MassLynxScanItem, MassLynxSampleListItem, );
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum MassLynxBatchItem {
 	SAMPLELIST_NAME = BATCH_ITEM_BASE,
@@ -694,7 +707,7 @@ pub enum MassLynxBatchItem {
 }
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum MassLynxAcquisitionType {
 	DDA = ACQUISITION_TYPE_BASE,
@@ -706,7 +719,27 @@ pub enum MassLynxAcquisitionType {
 	UNINITIALISED = ACQUISITION_TYPE_BASE + 49
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+impl TryFrom<i32> for MassLynxAcquisitionType {
+    type Error = String;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        Ok(match value as u32 {
+            x if x == Self::DDA as u32 => Self::DDA,
+            x if x == Self::MSE as u32 => Self::MSE,
+            x if x == Self::HDDDA as u32 => Self::HDDDA,
+            x if x == Self::HDMSE as u32 => Self::HDMSE,
+            x if x == Self::SONAR as u32 => Self::SONAR,
+            x if x == Self::UNKNOWN as u32 => Self::UNKNOWN,
+            x if x == Self::UNINITIALISED as u32 => Self::UNINITIALISED,
+            _ => return Err(format!("Cannot convert {value} into MassLynxAcquisitionType")),
+        })
+    }
+}
+
+impl_as_key!(MassLynxAcquisitionType);
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum MassLynxScanType {
 	MS1 = SCAN_TYPE_BASE,
@@ -714,7 +747,7 @@ pub enum MassLynxScanType {
 	UNINITIALISED = SCAN_TYPE_BASE + 9
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum LockMassParameter {
     MASS = LOCKMASS_ITEM_BASE,
@@ -837,3 +870,43 @@ pub enum ThresholdType {
 	ABSOLUTE_THESHOLD = THESHOLD_TYPE_BASE,
 	RELATIVE_THESHOLD = THESHOLD_TYPE_BASE + 1
 }
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u32)]
+pub enum AcquisitionParameter {
+	TYPE = ACQUISITION_PARAMETER_BASE,
+	LOCKMASS = ACQUISITION_PARAMETER_BASE + 1,
+	MS1 = ACQUISITION_PARAMETER_BASE + 2,
+	MS2 = ACQUISITION_PARAMETER_BASE + 3,
+	PRECURSOR_MASS_START = ACQUISITION_PARAMETER_BASE + 4,
+	PRECURSOR_MASS_END = ACQUISITION_PARAMETER_BASE + 5,
+	FUNCTIONS = ACQUISITION_PARAMETER_BASE + 6,
+	SAMPLINGFREQUENCY = ACQUISITION_PARAMETER_BASE + 7,
+	LTEFF = ACQUISITION_PARAMETER_BASE + 8,
+	VEFF = ACQUISITION_PARAMETER_BASE + 9,
+	RESOLUTION = ACQUISITION_PARAMETER_BASE + 10
+}
+
+impl TryFrom<i32> for AcquisitionParameter {
+    type Error = String;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        Ok(match value as u32 {
+            x if x == Self::TYPE as u32 => Self::TYPE,
+            x if x == Self::LOCKMASS as u32 => Self::LOCKMASS,
+            x if x == Self::MS1 as u32 => Self::MS1,
+            x if x == Self::MS2 as u32 => Self::MS2,
+            x if x == Self::PRECURSOR_MASS_START as u32 => Self::PRECURSOR_MASS_START,
+            x if x == Self::PRECURSOR_MASS_END as u32 => Self::PRECURSOR_MASS_END,
+            x if x == Self::FUNCTIONS as u32 => Self::FUNCTIONS,
+            x if x == Self::SAMPLINGFREQUENCY as u32 => Self::SAMPLINGFREQUENCY,
+            x if x == Self::LTEFF as u32 => Self::LTEFF,
+            x if x == Self::VEFF as u32 => Self::VEFF,
+            x if x == Self::RESOLUTION as u32 => Self::RESOLUTION,
+            _ => return Err(format!("Cannot convert {value} into AcquisitionParameter")),
+        })
+    }
+}
+
+impl_as_key!(AcquisitionParameter);

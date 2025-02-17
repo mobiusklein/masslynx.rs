@@ -153,6 +153,10 @@ extern "stdcall" {
         nItems: c_int,
         pParameters: CMassLynxParameters,
     ) -> c_int;
+    pub fn getAcquisitionInfo(
+        mlInfoReader: CMassLynxBaseReader,
+        parameters: CMassLynxParameters,
+    ) -> c_int;
     pub fn getScanItemValue(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -287,7 +291,7 @@ extern "stdcall" {
         massWindow: c_float,
         bDaughters: c_char,
         pSize: *const c_int,
-    );
+    ) -> c_int;
     pub fn readSonarMassChromatogram(
         mlChromatogramReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -307,6 +311,18 @@ extern "stdcall" {
         nMRM: c_int,
         ppTimes: *const *const c_float,
         ppIntensities: *const *const c_float,
+        pSize: *const c_int,
+    ) -> c_int;
+
+    pub fn readMobillogram(
+        mlChromatogramReader: CMassLynxBaseReader,
+        whichFunction: c_int,
+        startScan: c_int,
+        endScan: c_int,
+        startMass: c_float,
+        endMass: c_float,
+        ppDriftBins: *const *const c_int,
+        ppIntensities: *const *const f32,
         pSize: *const c_int,
     ) -> c_int;
 
@@ -368,5 +384,85 @@ extern "stdcall" {
         mlLockMassProcessor: CMassLynxBaseProcessor,
         retentionTime: c_float,
         pGain: *const c_float,
+    ) -> c_int;
+
+    // Analog reader functions
+    pub fn getChannelCount(mlAnalogReader: CMassLynxBaseReader, nChannels: *mut c_int) -> c_int;
+    pub fn readChannel(
+        mlAnalogReader: CMassLynxBaseReader,
+        nWhichChannel: c_int,
+        pTimes: *const *const c_float,
+        pIntensities: *const *const c_float,
+        pSize: *mut c_int,
+    ) -> c_int;
+    pub fn getChannelDesciption(
+        mlAnalogReader: CMassLynxBaseReader,
+        nWhichChannel: c_int,
+        ppDescription: *const *const c_char,
+    ) -> c_int;
+    pub fn getChannelUnits(
+        mlAnalogReader: CMassLynxBaseReader,
+        nWhichChannel: c_int,
+        ppUnits: *const *const c_char,
+    ) -> c_int;
+
+    /// Scan processor functions
+    pub fn getScan(
+        mlScanProcessor: CMassLynxBaseProcessor,
+        ppMasses: *const *const c_float,
+        ppIntensities: *const *const c_float,
+        nSize: *mut c_int,
+    ) -> c_int;
+    pub fn setScan(
+        mlScanProcessor: CMassLynxBaseProcessor,
+        pMasses: *const c_float,
+        pIntensities: *const c_float,
+        nMassSize: c_int,
+        nIntensitySize: c_int,
+    ) -> c_int;
+
+    // combine
+    pub fn combineScan(
+        mlScanProcessor: CMassLynxBaseProcessor,
+        whichFunction: c_int,
+        startScan: c_int,
+        endScan: c_int,
+    ) -> c_int;
+    pub fn combineDriftScan(
+        mlSpectrumProcessor: CMassLynxBaseProcessor,
+        whichFunction: c_int,
+        startScan: c_int,
+        endScan: c_int,
+        startDrift: c_int,
+        endDrift: c_int,
+    ) -> c_int;
+
+    // smooth
+    pub fn smoothScan(mlScanProcessor: CMassLynxBaseProcessor) -> c_int;
+    pub fn setSmoothParameter(
+        mlScanProcessor: CMassLynxBaseProcessor,
+        pParameters: CMassLynxParameters,
+    ) -> c_int;
+    pub fn getSmoothParameter(
+        mlScanProcessor: CMassLynxBaseProcessor,
+        parameters: CMassLynxParameters,
+    ) -> c_int;
+
+    // centroid
+    pub fn centroidScan(mlScanProcessor: CMassLynxBaseProcessor) -> c_int;
+    pub fn setCentroidParameter(
+        mlScanProcessor: CMassLynxBaseProcessor,
+        parameters: CMassLynxParameters,
+    ) -> c_int;
+    pub fn getCentroidParameter(
+        mlScanProcessor: CMassLynxBaseProcessor,
+        parameters: CMassLynxParameters,
+    ) -> c_int;
+
+    // theshold
+    pub fn thresholdScan(mlScanProcessor: CMassLynxBaseProcessor) -> c_int;
+    pub fn setThresholdParameter(
+        mlScanProcessor: CMassLynxBaseProcessor,
+        pParameters: CMassLynxParameters,
     ) -> c_int;
 }

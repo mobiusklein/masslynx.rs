@@ -1,13 +1,31 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::ffi::{c_char, c_float, c_int, c_uint, c_void, CStr, CString};
 use std::fmt::Display;
+use std::hash::Hash;
 use std::path::Path;
 use std::{mem, ptr};
 
 use log::trace;
 
 use crate::constants::MassLynxHeaderItem;
-use crate::{ffi, constants::{AsMassLynxItemKey, MassLynxBaseType, MassLynxScanItem, MassLynxFunctionType, MassLynxIonMode}};
+use crate::{
+    constants::{
+        AsMassLynxItemKey, MassLynxBaseType, MassLynxFunctionType, MassLynxIonMode,
+        MassLynxScanItem,
+    },
+    ffi,
+};
+
+macro_rules! fficall {
+    ($task:tt) => {
+        #[allow(unused_braces)]
+        let code = unsafe { $task };
+        if code != 0 {
+            return Err(Self::mass_lynx_error_for_code(code));
+        }
+    };
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct MassLynxError {
@@ -76,6 +94,11 @@ pub trait MassLynxReaderHelper {
             destination.push(unsafe { *p_array.offset(i as isize) });
         }
     }
+
+    fn free_memory(p_data: *const c_void) -> MassLynxResult<()> {
+        fficall!({ ffi::releaseMemory(p_data) });
+        Ok(())
+    }
 }
 
 pub struct Helper();
@@ -84,25 +107,13 @@ impl MassLynxReaderHelper for Helper {}
 
 pub fn get_mass_lynx_version() -> Option<String> {
     let mut buf = ptr::null();
-    let code = unsafe {
-        ffi::getVersionInfo(&mut buf)
-    };
+    let code = unsafe { ffi::getVersionInfo(&mut buf) };
     if code != 0 {
-        return None
+        return None;
     }
     let s = Helper::to_string(buf);
     unsafe { ffi::releaseMemory(buf as *const c_void) };
     Some(s)
-}
-
-macro_rules! fficall {
-    ($task:tt) => {
-        #[allow(unused_braces)]
-        let code = unsafe { $task };
-        if code != 0 {
-            return Err(Self::mass_lynx_error_for_code(code));
-        }
-    };
 }
 
 macro_rules! get_function_property {
@@ -145,7 +156,10 @@ macro_rules! get_function_property {
 
 macro_rules! get_function_property_two {
     ($name:ident, $prop_type1:ty, $prop_type2:ty, $ffi_fn:path) => {
-        pub fn $name(&mut self, which_function: usize) -> MassLynxResult<($prop_type1, $prop_type2)> {
+        pub fn $name(
+            &mut self,
+            which_function: usize,
+        ) -> MassLynxResult<($prop_type1, $prop_type2)> {
             let mut prop: $prop_type1 = unsafe { mem::MaybeUninit::zeroed().assume_init() };
             let mut prop2: $prop_type2 = unsafe { mem::MaybeUninit::zeroed().assume_init() };
             let code = unsafe { ($ffi_fn)(self.0, which_function as c_int, &mut prop, &mut prop2) };
@@ -222,8 +236,14 @@ macro_rules! get_scan_property {
             which_scan: usize,
         ) -> MassLynxResult<$out_type> {
             let mut prop: $prop_type = unsafe { mem::MaybeUninit::zeroed().assume_init() };
-            let code =
-                unsafe { ($ffi_fn)(self.0, which_function as c_int, which_scan as c_int, &mut prop) };
+            let code = unsafe {
+                ($ffi_fn)(
+                    self.0,
+                    which_function as c_int,
+                    which_scan as c_int,
+                    &mut prop,
+                )
+            };
             if code != 0 {
                 Err(Self::mass_lynx_error_for_code(code))
             } else {
@@ -257,7 +277,8 @@ impl MassLynxParameters {
     }
 
     pub fn set<T: AsMassLynxItemKey>(&mut self, key: T, value: String) -> MassLynxResult<()> {
-        let value_ptr = CString::new(value).expect("Failed to convert value to C-compatible string");
+        let value_ptr =
+            CString::new(value).expect("Failed to convert value to C-compatible string");
         let code = unsafe { ffi::setParameterValue(self.0, key.as_key(), value_ptr.as_ptr()) };
 
         if code != 0 {
@@ -299,6 +320,10 @@ impl MassLynxParameters {
                 None
             }
         })
+    }
+
+    pub fn to_hashmap<T: AsMassLynxItemKey + Eq + Hash>(&self) -> HashMap<T, String> {
+        self.iter().collect()
     }
 
     pub const fn as_ptr_mut(&mut self) -> ffi::CMassLynxParameters {
@@ -370,11 +395,7 @@ pub trait AsMassLynxSource: Default + MassLynxReaderHelper {
         let s = CString::new(s).expect("Failed to convert path to a C-compatible string");
         let mut this = Self::default();
         fficall!({
-            ffi::createRawReaderFromPath(
-                s.as_ptr(),
-                this.source_mut(),
-                Self::base_type(),
-            )
+            ffi::createRawReaderFromPath(s.as_ptr(), this.source_mut(), Self::base_type())
         });
         debug_assert!(!this.as_mass_lynx_source().is_null());
         Ok(this)
@@ -384,13 +405,7 @@ pub trait AsMassLynxSource: Default + MassLynxReaderHelper {
         let mut this = Self::default();
         let reader_type = Self::base_type();
         let source_ptr = source.as_mass_lynx_source();
-        fficall!({
-            ffi::createRawReaderFromReader(
-                source_ptr,
-                this.source_mut(),
-                reader_type,
-            )
-        });
+        fficall!({ ffi::createRawReaderFromReader(source_ptr, this.source_mut(), reader_type,) });
         debug_assert!(!this.as_mass_lynx_source().is_null());
         Ok(this)
     }
@@ -442,7 +457,12 @@ impl MassLynxInfoReader {
     );
     get_function_property!(get_mrm_count, c_int as usize, ffi::getMRMCount);
 
-    get_function_property_two!(get_acquisition_time_range, c_float, c_float, ffi::getAcquisitionTimeRange);
+    get_function_property_two!(
+        get_acquisition_time_range,
+        c_float,
+        c_float,
+        ffi::getAcquisitionTimeRange
+    );
 
     get_scan_property!(get_retention_time, c_float as f64, ffi::getRetentionTime);
 
@@ -450,22 +470,15 @@ impl MassLynxInfoReader {
         let mut has_lock_mass = 0;
         let mut lock_mass_function = 0;
 
-        fficall!({
-            ffi::getLockMassFunction(self.0, &mut has_lock_mass, &mut lock_mass_function)
-        });
+        fficall!({ ffi::getLockMassFunction(self.0, &mut has_lock_mass, &mut lock_mass_function) });
 
         Ok((has_lock_mass != 0, lock_mass_function as usize))
     }
 
-    pub fn get_drift_time(
-        &mut self,
-        which_drift: usize,
-    ) -> MassLynxResult<f64> {
+    pub fn get_drift_time(&mut self, which_drift: usize) -> MassLynxResult<f64> {
         let mut out = 0.0;
 
-        fficall!({
-            ffi::getDriftTime(self.0, which_drift as c_int, &mut out)
-        });
+        fficall!({ ffi::getDriftTime(self.0, which_drift as c_int, &mut out) });
 
         Ok(out as f64)
     }
@@ -483,11 +496,20 @@ impl MassLynxInfoReader {
         }
     }
 
-    pub fn get_header_items(&self, items: &[MassLynxHeaderItem]) -> MassLynxResult<MassLynxParameters> {
+    pub fn get_header_items(
+        &self,
+        items: &[MassLynxHeaderItem],
+    ) -> MassLynxResult<MassLynxParameters> {
         let params = MassLynxParameters::new()?;
         fficall!({
             ffi::getHeaderItemValue(self.0, items.as_ptr(), items.len() as c_int, params.0)
         });
+        Ok(params)
+    }
+
+    pub fn get_acquisition_info(&mut self) -> MassLynxResult<MassLynxParameters> {
+        let params = MassLynxParameters::new()?;
+        fficall!({ ffi::getAcquisitionInfo(self.0, params.0) });
         Ok(params)
     }
 
@@ -663,6 +685,114 @@ impl MassLynxChromatogramReader {
         Self::copy_data_into_vec(p_intens, size, intensity_array);
         Ok(())
     }
+
+    pub fn read_mass_chromatograms_into(
+        &mut self,
+        which_function: usize,
+        mass_list: &[f32],
+        time_array: &mut Vec<f32>,
+        intensity_arrays: &mut [Vec<f32>],
+        mass_window: f32,
+        daughters: bool,
+    ) -> MassLynxResult<()> {
+        let p_times = ptr::null();
+        let p_intens = ptr::null();
+        let size = 0;
+
+        fficall!({
+            ffi::readMassChromatograms(
+                self.0,
+                which_function as c_int,
+                mass_list.as_ptr(),
+                mass_list.len() as c_int,
+                &p_times,
+                &p_intens,
+                mass_window,
+                daughters as i8,
+                &size,
+            )
+        });
+
+        Self::copy_data_into_vec(p_times, size, time_array);
+
+        for (i, buf) in intensity_arrays.iter_mut().enumerate() {
+            let offset_p_intens = unsafe { p_intens.offset(size as isize * i as isize) };
+            Self::copy_data_into_vec(offset_p_intens, size, buf);
+        }
+        Self::free_memory(p_times as *const c_void)?;
+        Self::free_memory(p_intens as *const c_void)?;
+        Ok(())
+    }
+
+    pub fn read_mass_chromatogram_into(
+        &mut self,
+        which_function: usize,
+        mass: f32,
+        time_array: &mut Vec<f32>,
+        intensity_array: &mut Vec<f32>,
+        mass_window: f32,
+        daughters: bool,
+    ) -> MassLynxResult<()> {
+        let p_times = ptr::null();
+        let p_intens = ptr::null();
+        let size = 0;
+
+        fficall!({
+            ffi::readMassChromatograms(
+                self.0,
+                which_function as c_int,
+                [mass].as_ptr(),
+                1,
+                &p_times,
+                &p_intens,
+                mass_window,
+                daughters as i8,
+                &size,
+            )
+        });
+
+        Self::copy_data_into_vec(p_times, size, time_array);
+        Self::copy_data_into_vec(p_intens, size, intensity_array);
+        Self::free_memory(p_times as *const c_void)?;
+        Self::free_memory(p_intens as *const c_void)?;
+        Ok(())
+    }
+
+    pub fn read_mobilogram_into(
+        &mut self,
+        which_function: usize,
+        start_scan: usize,
+        end_scan: usize,
+        start_mass: f32,
+        end_mass: f32,
+        drift_bins: &mut Vec<i32>,
+        intensity_array: &mut Vec<f32>,
+    ) -> MassLynxResult<()> {
+        let p_drifts = ptr::null();
+        let p_intens = ptr::null();
+        let size = 0;
+
+        fficall!({
+            ffi::readMobillogram(
+                self.0,
+                which_function as c_int,
+                start_scan as c_int,
+                end_scan as c_int,
+                start_mass,
+                end_mass,
+                &p_drifts,
+                &p_intens,
+                &size,
+            )
+        });
+
+        Self::copy_data_into_vec(p_drifts, size, drift_bins);
+        Self::copy_data_into_vec(p_intens, size, intensity_array);
+        Self::free_memory(p_drifts as *const c_void)?;
+        Self::free_memory(p_intens as *const c_void)?;
+
+        Ok(())
+    }
 }
 
 pub struct MassLynxLockMassProcessor(ffi::CMassLynxBaseProcessor);
@@ -732,9 +862,7 @@ impl MassLynxLockMassProcessor {
 
     pub fn lock_mass_correct(&mut self) -> MassLynxResult<bool> {
         let corrected = 0;
-        fficall!({
-            ffi::lockMassCorrect(self.0, &corrected)
-        });
+        fficall!({ ffi::lockMassCorrect(self.0, &corrected) });
         Ok(corrected != 0)
     }
 
@@ -768,6 +896,224 @@ impl Drop for MassLynxLockMassProcessor {
 }
 
 impl Default for MassLynxLockMassProcessor {
+    fn default() -> Self {
+        Self(ptr::null_mut())
+    }
+}
+
+pub struct MassLynxAnalogReader(ffi::CMassLynxBaseReader);
+
+impl MassLynxAnalogReader {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> MassLynxResult<Self> {
+        <Self as AsMassLynxSource>::from_path(path)
+    }
+
+    pub fn channel_count(&self) -> MassLynxResult<usize> {
+        let mut size = 0;
+
+        fficall!({ ffi::getChannelCount(self.0, &mut size) });
+
+        Ok(size as usize)
+    }
+
+    pub fn read_channel(&mut self, which_channel: usize) -> MassLynxResult<(Vec<f32>, Vec<f32>)> {
+        let times = ptr::null();
+        let ints = ptr::null();
+        let mut size = 0;
+        fficall!({ ffi::readChannel(self.0, which_channel as c_int, &times, &ints, &mut size) });
+
+        let mut times_: Vec<f32> = Vec::new();
+        let mut ints_: Vec<f32> = Vec::new();
+
+        Self::copy_data_into_vec(times, size, &mut times_);
+        Self::copy_data_into_vec(ints, size, &mut ints_);
+
+        Ok((times_, ints_))
+    }
+
+    pub fn channel_description(&mut self, which_channel: usize) -> MassLynxResult<String> {
+        let s = ptr::null();
+
+        fficall!({ ffi::getChannelDesciption(self.0, which_channel as c_int, &s) });
+
+        Ok(Self::to_string(s))
+    }
+
+    pub fn channel_units(&mut self, which_channel: usize) -> MassLynxResult<String> {
+        let s = ptr::null();
+
+        fficall!({ ffi::getChannelUnits(self.0, which_channel as c_int, &s) });
+
+        Ok(Self::to_string(s))
+    }
+}
+
+impl_reader_apis!(MassLynxAnalogReader, MassLynxBaseType::ANALOG);
+
+pub struct MassLynxScanProcessor(ffi::CMassLynxBaseProcessor);
+
+impl MassLynxScanProcessor {
+    pub fn new() -> MassLynxResult<Self> {
+        let this = Self::default();
+        let code = unsafe {
+            ffi::createRawProcessor(
+                &this.0,
+                MassLynxBaseType::SCAN,
+                None,
+                ptr::addr_of!(this) as *const c_void,
+            )
+        };
+        if code != 0 {
+            Err(Self::mass_lynx_error_for_code(code))
+        } else {
+            Ok(this)
+        }
+    }
+
+    pub fn set_raw_data_from_reader<T: AsMassLynxSource>(
+        &mut self,
+        raw_reader: &T,
+    ) -> MassLynxResult<()> {
+        fficall!({ ffi::setRawReader(self.0, raw_reader.as_mass_lynx_source()) });
+
+        Ok(())
+    }
+
+    pub fn set_raw_data_from_path(&mut self, path: String) -> MassLynxResult<()> {
+        let cpath = CString::new(path).expect("Failed to convert path to C-compatible string");
+        fficall!({ ffi::setRawPath(self.0, cpath.as_ptr() as *const i8) });
+        Ok(())
+    }
+
+    pub fn load(&mut self, which_function: usize, which_scan: usize) -> MassLynxResult<()> {
+        fficall!({
+            ffi::combineScan(
+                self.0,
+                which_function as c_int,
+                which_scan as c_int,
+                which_scan as c_int,
+            )
+        });
+        Ok(())
+    }
+
+    pub fn load_drift(
+        &mut self,
+        which_function: usize,
+        which_scan: usize,
+        which_drift: usize,
+    ) -> MassLynxResult<()> {
+        fficall!({
+            ffi::combineDriftScan(
+                self.0,
+                which_function as c_int,
+                which_scan as c_int,
+                which_scan as c_int,
+                which_drift as c_int,
+                which_drift as c_int,
+            )
+        });
+        Ok(())
+    }
+
+    pub fn combine(
+        &mut self,
+        which_function: usize,
+        start_scan: usize,
+        end_scan: usize,
+    ) -> MassLynxResult<()> {
+        fficall!({
+            ffi::combineScan(
+                self.0,
+                which_function as c_int,
+                start_scan as c_int,
+                end_scan as c_int,
+            )
+        });
+        Ok(())
+    }
+
+    pub fn combine_drift(
+        &mut self,
+        which_function: usize,
+        start_scan: usize,
+        end_scan: usize,
+        start_drift: usize,
+        end_drift: usize,
+    ) -> MassLynxResult<()> {
+        fficall!({
+            ffi::combineDriftScan(
+                self.0,
+                which_function as c_int,
+                start_scan as c_int,
+                end_scan as c_int,
+                start_drift as c_int,
+                end_drift as c_int,
+            )
+        });
+        Ok(())
+    }
+
+    pub fn set_centroid_parameters(&mut self, params: MassLynxParameters) -> MassLynxResult<()> {
+        fficall!({ ffi::setCentroidParameter(self.0, params.0) });
+        Ok(())
+    }
+
+    pub fn set_smooth_parameters(&mut self, params: MassLynxParameters) -> MassLynxResult<()> {
+        fficall!({ ffi::setSmoothParameter(self.0, params.0) });
+        Ok(())
+    }
+
+    pub fn set_scan(&mut self, mz_array: &[f32], intensity_array: &[f32]) -> MassLynxResult<()> {
+        fficall!({
+            ffi::setScan(
+                self.0,
+                mz_array.as_ptr(),
+                intensity_array.as_ptr(),
+                mz_array.len() as c_int,
+                intensity_array.len() as c_int,
+            )
+        });
+        Ok(())
+    }
+
+    pub fn centroid(&mut self) -> MassLynxResult<()> {
+        fficall!({ ffi::centroidScan(self.0) });
+        Ok(())
+    }
+
+    pub fn smooth(&mut self) -> MassLynxResult<()> {
+        fficall!({ ffi::smoothScan(self.0) });
+        Ok(())
+    }
+
+    pub fn get(
+        &self,
+        mz_array: &mut Vec<f32>,
+        intensity_array: &mut Vec<f32>,
+    ) -> MassLynxResult<()> {
+        let mzs = ptr::null();
+        let intens = ptr::null();
+        let mut size = 0;
+        fficall!({ ffi::getScan(self.0, &mzs, &intens, &mut size) });
+
+        Self::copy_data_into_vec(mzs, size, mz_array);
+        Self::copy_data_into_vec(intens, size, intensity_array);
+        Ok(())
+    }
+}
+
+impl MassLynxReaderHelper for MassLynxScanProcessor {}
+
+impl Drop for MassLynxScanProcessor {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::destroyRawProcessor(self.0);
+        }
+    }
+}
+
+impl Default for MassLynxScanProcessor {
     fn default() -> Self {
         Self(ptr::null_mut())
     }
