@@ -811,7 +811,7 @@ pub enum AutoLynxStatus {
     UNINITIALISED = AUTOLYNX_STATUS_BASE + 9,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum CentroidParameter
 {
@@ -839,7 +839,7 @@ pub enum DDAIsolationWindowParameter {
 }
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum SmoothParameter {
 	NUMBER = SMOOTH_ITEM_BASE,
@@ -847,7 +847,7 @@ pub enum SmoothParameter {
 	SMOOTHTYPE = SMOOTH_ITEM_BASE + 2
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum SmoothType {
 	MEAN = SMOOTH_TYPE_BASE,
@@ -856,7 +856,7 @@ pub enum SmoothType {
 }
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub enum ThresholdParameter {
 	VALUE = THESHOLD_ITEM_BASE,

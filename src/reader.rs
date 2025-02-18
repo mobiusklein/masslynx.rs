@@ -11,10 +11,10 @@ use std::{
 use crate::{
     base::MassLynxChromatogramReader,
     constants::{
-        AcquisitionParameter, LockMassParameter, MassLynxAcquisitionType, MassLynxFunctionType, MassLynxHeaderItem, MassLynxIonMode, MassLynxScanItem
+        AcquisitionParameter, LockMassParameter, MassLynxFunctionType, MassLynxHeaderItem, MassLynxIonMode, MassLynxScanItem
     },
     AsMassLynxSource, MassLynxError, MassLynxInfoReader, MassLynxLockMassProcessor,
-    MassLynxParameters, MassLynxResult, MassLynxScanReader,
+    MassLynxParameters, MassLynxResult, MassLynxScanReader, MassLynxAnalogReader,
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -213,11 +213,28 @@ impl ScanFunction {
 #[derive(Debug, Default)]
 struct ScanReadingOptions {
     skip_lockmass: bool,
+    load_signal: bool,
 }
 
 impl ScanReadingOptions {
-    fn new(skip_lockmass: bool) -> Self {
-        Self { skip_lockmass }
+    fn new(skip_lockmass: bool, load_signal: bool) -> Self {
+        Self { skip_lockmass, load_signal }
+    }
+
+    fn skip_lockmass(&self) -> bool {
+        self.skip_lockmass
+    }
+
+    fn set_skip_lockmass(&mut self, skip_lockmass: bool) {
+        self.skip_lockmass = skip_lockmass;
+    }
+
+    fn set_load_signal(&mut self, load_signal: bool) {
+        self.load_signal = load_signal;
+    }
+
+    fn load_signal(&self) -> bool {
+        self.load_signal
     }
 }
 
@@ -227,6 +244,7 @@ pub struct MassLynxReader {
     info_reader: MassLynxInfoReader,
     chromatogram_reader: MassLynxChromatogramReader,
     lockmass_processor: MassLynxLockMassProcessor,
+    analog_reader: Option<MassLynxAnalogReader>,
     cycle_index: Vec<CycleIndexEntry>,
     spectrum_index: Vec<SpectrumIndexEntry>,
     scan_reading_options: ScanReadingOptions,
@@ -238,6 +256,7 @@ impl MassLynxReader {
         let info_reader = MassLynxInfoReader::from_path(&path)?;
         let scan_reader = MassLynxScanReader::from_source(&info_reader)?;
         let chromatogram_reader = MassLynxChromatogramReader::from_source(&info_reader)?;
+        let analog_reader = MassLynxAnalogReader::from_source(&info_reader).ok();
         let mut lockmass_processor = MassLynxLockMassProcessor::new()?;
         lockmass_processor.set_raw_data_from_reader(&scan_reader)?;
 
@@ -251,10 +270,11 @@ impl MassLynxReader {
             info_reader,
             scan_reader,
             chromatogram_reader,
+            analog_reader,
             lockmass_processor,
             cycle_index: Default::default(),
             spectrum_index: Default::default(),
-            scan_reading_options: ScanReadingOptions::new(true),
+            scan_reading_options: ScanReadingOptions::new(true, true),
             functions: Vec::new(),
         };
 
@@ -457,10 +477,13 @@ impl MassLynxReader {
 
         let spec = match entry.drift_index {
             Some(i) => {
-                let (mzs, intens) = self
+                let (mzs, intens) = if self.scan_reading_options.load_signal { self
                     .scan_reader
                     .read_drift_scan(entry.function, entry.cycle, i as usize)
-                    .ok()?;
+                    .ok()?
+                } else {
+                    (Vec::new(), Vec::new())
+                };
 
                 let drift_time = self.info_reader.get_drift_time(i as usize).ok();
 
@@ -477,10 +500,13 @@ impl MassLynxReader {
                 )
             }
             None => {
-                let (mzs, intens) = self
+                let (mzs, intens) = if self.scan_reading_options.load_signal { self
                     .scan_reader
                     .read_scan(entry.function, entry.cycle)
-                    .ok()?;
+                    .ok()?
+                } else {
+                    Default::default()
+                };
 
                 Spectrum::new(
                     mzs,
@@ -518,15 +544,20 @@ impl MassLynxReader {
         let ion_mode = self.info_reader.get_ion_mode(entry.function).ok()?;
         let is_continuum = self.info_reader.is_continuum(entry.function).ok()?;
 
-        let mut scans = Vec::with_capacity(entry.im_block_size);
-        for i in 0..entry.im_block_size {
-            let (mzs, intensities) = self
-                .scan_reader
-                .read_drift_scan(entry.function, entry.block, i)
-                .ok()?;
-            let drift_time = self.info_reader.get_drift_time(i).ok()?;
-            scans.push(DriftScan::new(drift_time, mzs, intensities));
-        }
+        let scans = if self.scan_reading_options.load_signal {
+            let mut scans = Vec::with_capacity(entry.im_block_size);
+            for i in 0..entry.im_block_size {
+                let (mzs, intensities) = self
+                    .scan_reader
+                    .read_drift_scan(entry.function, entry.block, i)
+                    .ok()?;
+                let drift_time = self.info_reader.get_drift_time(i).ok()?;
+                scans.push(DriftScan::new(drift_time, mzs, intensities));
+            }
+            scans
+        } else {
+            Vec::new()
+        };
 
         let items = self.read_scan_items(entry.function, entry.block).ok()?;
 
@@ -543,6 +574,22 @@ impl MassLynxReader {
 
     pub fn iter_cycles(&mut self) -> impl Iterator<Item = Cycle> + '_ {
         (0..(self.cycle_index.len())).flat_map(|i| self.get_cycle(i))
+    }
+
+    pub fn get_signal_loading(&self) -> bool {
+        self.scan_reading_options.load_signal()
+    }
+
+    pub fn set_signal_loading(&mut self, load_signal: bool) {
+        self.scan_reading_options.set_load_signal(load_signal)
+    }
+
+    pub fn get_lockmass_skipping(&self) -> bool {
+        self.scan_reading_options.skip_lockmass()
+    }
+
+    pub fn set_lockmass_skipping(&mut self, skip_lockmass: bool) {
+        self.scan_reading_options.set_skip_lockmass(skip_lockmass)
     }
 }
 
@@ -691,6 +738,35 @@ impl MassLynxReader {
             })
             .collect();
         Ok((drift_times?, intensity_array))
+    }
+
+    pub fn iter_analogs(&mut self) -> impl Iterator<Item=Trace> + '_ {
+        let num_analog_traces = self.analog_reader.as_mut().and_then(|ar| {
+            ar.channel_count().ok()
+        }).unwrap_or_default();
+
+        (0..num_analog_traces).flat_map(|i| -> MassLynxResult<Trace> {
+            let reader = self.analog_reader.as_mut().unwrap();
+            let (time, intensity) = reader.read_channel(i)?;
+            let name = reader.channel_description(i)?;
+            let unit = reader.channel_units(i)?;
+            Ok(Trace::new(name, unit, time, intensity))
+        })
+    }
+
+    pub fn get_analog_trace(&mut self, index: usize) -> Option<Trace> {
+        let num_analog_traces = self.analog_reader.as_mut().and_then(|ar| {
+            ar.channel_count().ok()
+        }).unwrap_or_default();
+        if index >= num_analog_traces {
+            return None
+        }
+        self.analog_reader.as_mut().and_then(|reader| {
+            let (time, intensity) = reader.read_channel(index).ok()?;
+            let name = reader.channel_description(index).ok()?;
+            let unit = reader.channel_units(index).ok()?;
+            Some(Trace::new(name, unit, time, intensity))
+        })
     }
 }
 
@@ -883,5 +959,19 @@ impl Cycle {
 
     pub fn native_id(&self) -> String {
         self.identifier.native_id()
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Trace {
+    pub name: String,
+    pub unit: String,
+    pub time: Vec<f32>,
+    pub intensity: Vec<f32>,
+}
+
+impl Trace {
+    pub fn new(name: String, unit: String, time: Vec<f32>, intensity: Vec<f32>) -> Self {
+        Self { name, unit, time, intensity }
     }
 }

@@ -50,6 +50,16 @@ fn show_chromatogram(reader: &mut MassLynxReader) {
     });
 }
 
+fn show_ms_level_counts(reader: &mut MassLynxReader) {
+    reader.set_signal_loading(false);
+    let mut counters = [0, 0, 0];
+    let funcs = reader.functions().to_vec();
+    for cycle in reader.iter_cycles() {
+        counters[funcs[cycle.function()].ms_level as usize] += 1;
+    }
+
+    eprintln!("MS Levels: {counters:?}");
+}
 
 fn show_tic(reader: &mut MassLynxReader) -> MassLynxResult<()> {
     let (tic_time, tic_int) = reader.tic()?;
@@ -77,6 +87,14 @@ fn show_tic(reader: &mut MassLynxReader) -> MassLynxResult<()> {
     Ok(())
 }
 
+#[allow(unused)]
+fn show_analog(reader: &mut MassLynxReader) -> MassLynxResult<()> {
+    for trace in reader.iter_analogs() {
+        eprintln!("{} {}: {}", trace.name, trace.unit, trace.time.len());
+    }
+
+    Ok(())
+}
 
 fn main() -> Result<(), MassLynxError> {
     pretty_env_logger::init_timed();
@@ -89,7 +107,8 @@ fn main() -> Result<(), MassLynxError> {
     eprintln!("Opened reader with {} spectra", reader.len());
 
     eprintln!("{:?}", reader.header_items().unwrap());
-
+    show_ms_level_counts(&mut reader);
+    show_analog(&mut reader)?;
     // show_spectrum(&mut reader);
     // show_cycle(&mut reader);
     // show_chromatogram(&mut reader);
