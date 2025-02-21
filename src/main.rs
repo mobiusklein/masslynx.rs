@@ -27,11 +27,23 @@ fn show_cycle(reader: &mut MassLynxReader) {
         .unwrap_or_default();
 
     // This may panic if the index is out of bounds
-    let spec = match reader.get_cycle(spectrum_idx) {
-        Some(s) => s,
-        None => panic!("Index {} out of bounds for file {:?} with {} spectra", spectrum_idx, reader.path(), reader.len()),
+    match reader.get_cycle(spectrum_idx) {
+        Some(spec) => {
+            eprintln!("{:?}", spec);
+        },
+        None => {
+            match reader.cycle_index().get(spectrum_idx) {
+                Some(c) => {
+                    if !c.has_drift_time() {
+                        eprintln!("Cycle {spectrum_idx} has no ion mobility");
+                    } else {
+                        panic!("Index {} out of bounds for file {:?} with {} cycles", spectrum_idx, reader.path(), reader.cycle_index().len())
+                    }
+                },
+                None => panic!("Index {} out of bounds for file {:?} with {} cycles", spectrum_idx, reader.path(), reader.cycle_index().len())
+            }
+        },
     };
-    eprintln!("{:?}", spec);
 }
 
 #[allow(unused)]
@@ -89,8 +101,8 @@ fn show_analog(reader: &mut MassLynxReader) -> MassLynxResult<()> {
 fn show_mobilogram(reader: &mut MassLynxReader) -> MassLynxResult<()> {
     let (time_array, intensity_array) = reader.read_mobilogram(
         0, 0, 10, 50.0, 200.0)?;
-    eprintln!("Mobilogram from {:0.2} to {:0.2} with intensity range from {:0.2} to {:0.2}, 
-    ", 
+    eprintln!("Mobilogram from {:0.2} to {:0.2} with intensity range from {:0.2} to {:0.2},
+    ",
     time_array.first().copied().unwrap_or_default(),
     time_array.last().copied().unwrap_or_default(),
     intensity_array.first().copied().unwrap_or_default(),
@@ -111,11 +123,13 @@ fn main() -> Result<(), MassLynxError> {
 
     eprintln!("{:?}", reader.header_items().unwrap());
     show_ms_level_counts(&mut reader);
-    show_analog(&mut reader)?;
-    show_spectrum(&mut reader);
-    show_cycle(&mut reader);
+    // show_analog(&mut reader)?;
+    // show_spectrum(&mut reader);
+    // show_cycle(&mut reader);
     show_chromatogram(&mut reader);
-    show_mobilogram(&mut reader)?;
+    if let Err(e) = show_mobilogram(&mut reader) {
+        eprintln!("No mobilogram read: {e}");
+    }
     show_tic(&mut reader)?;
     Ok(())
 }

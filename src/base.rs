@@ -31,6 +31,19 @@ macro_rules! fficall {
 pub struct MassLynxError {
     pub error_code: i32,
     pub message: String,
+    pub extended_message: Option<String>,
+}
+
+impl MassLynxError {
+    pub fn new(error_code: i32, message: String) -> Self {
+        Self { error_code, message, extended_message: None }
+    }
+
+    pub fn extended_new(error_code: i32, message: String, extended_message: Option<String>) -> Self {
+        let mut this = Self::new(error_code, message);
+        this.extended_message = extended_message;
+        this
+    }
 }
 
 impl Display for MassLynxError {
@@ -39,7 +52,11 @@ impl Display for MassLynxError {
             f,
             "MassLynx Error occurred: ({}) {}",
             self.error_code, self.message
-        )
+        )?;
+        if let Some(s) = self.extended_message.as_ref() {
+            write!(f, "; {s}")?;
+        }
+        Ok(())
     }
 }
 
@@ -55,6 +72,7 @@ pub trait MassLynxReaderHelper {
         MassLynxError {
             error_code,
             message,
+            extended_message: None
         }
     }
 

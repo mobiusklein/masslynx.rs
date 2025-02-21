@@ -11,10 +11,11 @@ use std::{
 use crate::{
     base::MassLynxChromatogramReader,
     constants::{
-        AcquisitionParameter, LockMassParameter, MassLynxFunctionType, MassLynxHeaderItem, MassLynxIonMode, MassLynxScanItem
+        AcquisitionParameter, LockMassParameter, MassLynxFunctionType, MassLynxHeaderItem,
+        MassLynxIonMode, MassLynxScanItem,
     },
-    AsMassLynxSource, MassLynxError, MassLynxInfoReader, MassLynxLockMassProcessor,
-    MassLynxParameters, MassLynxResult, MassLynxScanReader, MassLynxAnalogReader,
+    AsMassLynxSource, MassLynxAnalogReader, MassLynxError, MassLynxInfoReader,
+    MassLynxLockMassProcessor, MassLynxParameters, MassLynxResult, MassLynxScanReader,
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -218,7 +219,10 @@ struct ScanReadingOptions {
 
 impl ScanReadingOptions {
     fn new(skip_lockmass: bool, load_signal: bool) -> Self {
-        Self { skip_lockmass, load_signal }
+        Self {
+            skip_lockmass,
+            load_signal,
+        }
     }
 
     fn skip_lockmass(&self) -> bool {
@@ -263,6 +267,7 @@ impl MassLynxReader {
         let path = RawPaths::from_path(PathBuf::from(path)).map_err(|e| MassLynxError {
             error_code: 9999,
             message: format!("Failed to build file name registry: {e}"),
+            extended_message: None,
         })?;
 
         let mut this = Self {
@@ -363,8 +368,24 @@ impl MassLynxReader {
         Ok(())
     }
 
+    fn augment_function_error(&self, mut error: MassLynxError) -> MassLynxError {
+        if error.error_code == 14 {
+            let f: Vec<_> = self
+                .functions()
+                .iter()
+                .map(|f| f.function.to_string())
+                .collect();
+            let f = f.join(", ");
+            error.extended_message = Some(format!("Available functions are: {f}"));
+        }
+        error
+    }
+
     fn translate_function_type_to_ms_level(&mut self, fnum: usize) -> MassLynxResult<u8> {
-        let ftype = self.info_reader.get_function_type(fnum)?;
+        let ftype = self
+            .info_reader
+            .get_function_type(fnum)
+            .map_err(|e| self.augment_function_error(e))?;
         match ftype {
             MassLynxFunctionType::MS
             | MassLynxFunctionType::TOF
@@ -450,11 +471,10 @@ impl MassLynxReader {
         scan: usize,
     ) -> MassLynxResult<Vec<(MassLynxScanItem, String)>> {
         if let Some(f) = self.functions.get(which_function) {
-            let params_values = self.info_reader.get_scan_item_values_for_scan(
-                which_function,
-                scan,
-                &f.scan_items,
-            )?;
+            let params_values = self
+                .info_reader
+                .get_scan_item_values_for_scan(which_function, scan, &f.scan_items)
+                .map_err(|e| self.augment_function_error(e))?;
             let items: Vec<_> = params_values.iter::<MassLynxScanItem>().collect();
             Ok(items)
         } else {
@@ -477,10 +497,10 @@ impl MassLynxReader {
 
         let spec = match entry.drift_index {
             Some(i) => {
-                let (mzs, intens) = if self.scan_reading_options.load_signal { self
-                    .scan_reader
-                    .read_drift_scan(entry.function, entry.cycle, i as usize)
-                    .ok()?
+                let (mzs, intens) = if self.scan_reading_options.load_signal {
+                    self.scan_reader
+                        .read_drift_scan(entry.function, entry.cycle, i as usize)
+                        .ok()?
                 } else {
                     (Vec::new(), Vec::new())
                 };
@@ -500,10 +520,10 @@ impl MassLynxReader {
                 )
             }
             None => {
-                let (mzs, intens) = if self.scan_reading_options.load_signal { self
-                    .scan_reader
-                    .read_scan(entry.function, entry.cycle)
-                    .ok()?
+                let (mzs, intens) = if self.scan_reading_options.load_signal {
+                    self.scan_reader
+                        .read_scan(entry.function, entry.cycle)
+                        .ok()?
                 } else {
                     Default::default()
                 };
@@ -593,14 +613,14 @@ impl MassLynxReader {
     }
 }
 
-
 /// Read chromatograms and mobilograms
 impl MassLynxReader {
     pub fn tic_of(&mut self, which_function: usize) -> MassLynxResult<(Vec<f32>, Vec<f32>)> {
         let mut times = Vec::new();
         let mut intensities = Vec::new();
         self.chromatogram_reader
-            .read_tic_into(which_function, &mut times, &mut intensities)?;
+            .read_tic_into(which_function, &mut times, &mut intensities)
+            .map_err(|e| self.augment_function_error(e))?;
 
         Ok((times, intensities))
     }
@@ -609,7 +629,8 @@ impl MassLynxReader {
         let mut times = Vec::new();
         let mut intensities = Vec::new();
         self.chromatogram_reader
-            .read_bpi_into(which_function, &mut times, &mut intensities)?;
+            .read_bpi_into(which_function, &mut times, &mut intensities)
+            .map_err(|e| self.augment_function_error(e))?;
 
         Ok((times, intensities))
     }
@@ -670,14 +691,16 @@ impl MassLynxReader {
         let mut time_array = Vec::new();
         let mut intensity_array = Vec::new();
 
-        self.chromatogram_reader.read_mass_chromatogram_into(
-            which_function,
-            mass,
-            &mut time_array,
-            &mut intensity_array,
-            mass_window,
-            daughters,
-        )?;
+        self.chromatogram_reader
+            .read_mass_chromatogram_into(
+                which_function,
+                mass,
+                &mut time_array,
+                &mut intensity_array,
+                mass_window,
+                daughters,
+            )
+            .map_err(|e| self.augment_function_error(e))?;
 
         Ok((time_array, intensity_array))
     }
@@ -692,14 +715,16 @@ impl MassLynxReader {
         let mut time_array = Vec::new();
         let mut intensity_arrays: Vec<_> = (0..(masses.len())).map(|_| Vec::new()).collect();
 
-        self.chromatogram_reader.read_mass_chromatograms_into(
-            which_function,
-            masses,
-            &mut time_array,
-            &mut intensity_arrays,
-            mass_window,
-            daughters,
-        )?;
+        self.chromatogram_reader
+            .read_mass_chromatograms_into(
+                which_function,
+                masses,
+                &mut time_array,
+                &mut intensity_arrays,
+                mass_window,
+                daughters,
+            )
+            .map_err(|e| self.augment_function_error(e))?;
 
         let time_array = Arc::new(time_array);
         let mut xics = Vec::new();
@@ -720,15 +745,17 @@ impl MassLynxReader {
     ) -> MassLynxResult<(Vec<f32>, Vec<f32>)> {
         let mut drift_bins = Vec::new();
         let mut intensity_array = Vec::new();
-        self.chromatogram_reader.read_mobilogram_into(
-            which_function,
-            start_scan,
-            end_scan,
-            start_mass,
-            end_mass,
-            &mut drift_bins,
-            &mut intensity_array,
-        )?;
+        self.chromatogram_reader
+            .read_mobilogram_into(
+                which_function,
+                start_scan,
+                end_scan,
+                start_mass,
+                end_mass,
+                &mut drift_bins,
+                &mut intensity_array,
+            )
+            .map_err(|e| self.augment_function_error(e))?;
         let drift_times: MassLynxResult<Vec<f32>> = drift_bins
             .into_iter()
             .map(|i| {
@@ -740,10 +767,19 @@ impl MassLynxReader {
         Ok((drift_times?, intensity_array))
     }
 
-    pub fn iter_analogs(&mut self) -> impl Iterator<Item=Trace> + '_ {
-        let num_analog_traces = self.analog_reader.as_mut().and_then(|ar| {
-            ar.channel_count().ok()
-        }).unwrap_or_default();
+    pub fn analog_trace_count(&self) -> usize {
+        self.analog_reader
+            .as_ref()
+            .and_then(|ar| ar.channel_count().ok())
+            .unwrap_or_default()
+    }
+
+    pub fn iter_analogs(&mut self) -> impl Iterator<Item = Trace> + '_ {
+        let num_analog_traces = self
+            .analog_reader
+            .as_mut()
+            .and_then(|ar| ar.channel_count().ok())
+            .unwrap_or_default();
 
         (0..num_analog_traces).flat_map(|i| -> MassLynxResult<Trace> {
             let reader = self.analog_reader.as_mut().unwrap();
@@ -755,11 +791,13 @@ impl MassLynxReader {
     }
 
     pub fn get_analog_trace(&mut self, index: usize) -> Option<Trace> {
-        let num_analog_traces = self.analog_reader.as_mut().and_then(|ar| {
-            ar.channel_count().ok()
-        }).unwrap_or_default();
+        let num_analog_traces = self
+            .analog_reader
+            .as_mut()
+            .and_then(|ar| ar.channel_count().ok())
+            .unwrap_or_default();
         if index >= num_analog_traces {
-            return None
+            return None;
         }
         self.analog_reader.as_mut().and_then(|reader| {
             let (time, intensity) = reader.read_channel(index).ok()?;
@@ -769,7 +807,6 @@ impl MassLynxReader {
         })
     }
 }
-
 
 /// General metadata reading
 impl MassLynxReader {
@@ -809,12 +846,12 @@ impl MassLynxReader {
         Ok(header_items)
     }
 
-    pub fn acquisition_information(&mut self) -> MassLynxResult<HashMap<AcquisitionParameter, String>> {
+    pub fn acquisition_information(
+        &mut self,
+    ) -> MassLynxResult<HashMap<AcquisitionParameter, String>> {
         Ok(self.info_reader.get_acquisition_info()?.to_hashmap())
     }
-
 }
-
 
 struct ChromatogramMerger {
     iters:
@@ -972,6 +1009,11 @@ pub struct Trace {
 
 impl Trace {
     pub fn new(name: String, unit: String, time: Vec<f32>, intensity: Vec<f32>) -> Self {
-        Self { name, unit, time, intensity }
+        Self {
+            name,
+            unit,
+            time,
+            intensity,
+        }
     }
 }
