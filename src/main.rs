@@ -1,5 +1,4 @@
 use std::env;
-
 use masslynx::reader::MassLynxReader;
 use masslynx::{self, MassLynxError, MassLynxResult};
 
@@ -43,7 +42,7 @@ fn show_chromatogram(reader: &mut MassLynxReader) {
         .and_then(|s| s.parse::<f32>().ok())
         .unwrap_or(366.14);
 
-    let (time, ints) = reader.read_xic(1, mass, 0.2, false).unwrap();
+    let (time, ints) = reader.read_xic(0, mass, 0.2, false).unwrap();
 
     time.into_iter().zip(ints).for_each(|(t, i)| {
         eprintln!("{t}\t{i}");
@@ -67,15 +66,7 @@ fn show_tic(reader: &mut MassLynxReader) -> MassLynxResult<()> {
         .iter()
         .copied()
         .enumerate()
-        .reduce(
-            |(i, max), (j, next)| {
-                if max > next {
-                    (i, max)
-                } else {
-                    (j, next)
-                }
-            },
-        )
+        .max_by(|(_, a), (_, b)| a.total_cmp(b))
         .unwrap_or_default();
 
     eprintln!(
@@ -92,7 +83,19 @@ fn show_analog(reader: &mut MassLynxReader) -> MassLynxResult<()> {
     for trace in reader.iter_analogs() {
         eprintln!("{} {}: {}", trace.name, trace.unit, trace.time.len());
     }
+    Ok(())
+}
 
+fn show_mobilogram(reader: &mut MassLynxReader) -> MassLynxResult<()> {
+    let (time_array, intensity_array) = reader.read_mobilogram(
+        0, 0, 10, 50.0, 200.0)?;
+    eprintln!("Mobilogram from {:0.2} to {:0.2} with intensity range from {:0.2} to {:0.2}, 
+    ", 
+    time_array.first().copied().unwrap_or_default(),
+    time_array.last().copied().unwrap_or_default(),
+    intensity_array.first().copied().unwrap_or_default(),
+    intensity_array.last().copied().unwrap_or_default()
+);
     Ok(())
 }
 
@@ -109,10 +112,10 @@ fn main() -> Result<(), MassLynxError> {
     eprintln!("{:?}", reader.header_items().unwrap());
     show_ms_level_counts(&mut reader);
     show_analog(&mut reader)?;
-    // show_spectrum(&mut reader);
-    // show_cycle(&mut reader);
-    // show_chromatogram(&mut reader);
-
+    show_spectrum(&mut reader);
+    show_cycle(&mut reader);
+    show_chromatogram(&mut reader);
+    show_mobilogram(&mut reader)?;
     show_tic(&mut reader)?;
     Ok(())
 }
