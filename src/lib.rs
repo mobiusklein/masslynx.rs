@@ -4,7 +4,18 @@ mod ffi;
 pub mod reader;
 
 pub use base::{
-    AsMassLynxSource, MassLynxError, MassLynxInfoReader, MassLynxParameters, MassLynxResult,
-    MassLynxScanReader, MassLynxChromatogramReader, MassLynxLockMassProcessor,
-    get_mass_lynx_version
+    get_mass_lynx_version, AsMassLynxSource, MassLynxAnalogReader, MassLynxChromatogramReader,
+    MassLynxError, MassLynxInfoReader, MassLynxLockMassProcessor, MassLynxParameters,
+    MassLynxResult, MassLynxScanProcessor, MassLynxScanReader,
+};
+
+pub use constants::{
+    AcquisitionParameter,
+    AnalogParameter,
+    AnalogTraceType,
+    CentroidParameter,
+    DDAIsolationWindowParameter,
+    MassLynxHeaderItem,
+    MassLynxIonMode,
+    MassLynxScanItem,
 };
