@@ -884,6 +884,14 @@ impl MassLynxLockMassProcessor {
         Ok(corrected != 0)
     }
 
+    pub fn auto_lock_mass_correct(&mut self, force: bool) -> MassLynxResult<bool> {
+        let mut corrected = 0;
+        fficall!({
+            ffi::autoLockMassCorrect(self.0, force as c_char, &mut corrected)
+        });
+        Ok(corrected != 0)
+    }
+
     pub fn get_candidates(
         &mut self,
         masses: &mut Vec<f32>,

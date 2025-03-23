@@ -1,0 +1,8 @@
+[package]
+name = "masslynx-mzdata"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mzdata = { version = "0.50.0", features = ["checksum"] }
+masslynx = { path = "../../" }

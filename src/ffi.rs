@@ -16,19 +16,27 @@ use crate::constants::{
 
 #[allow(unused)]
 pub type CMassLynxAcquisition = *mut c_void;
+
 pub type CMassLynxParameters = *mut c_void;
+
 pub type CMassLynxBaseReader = *mut c_void;
+
 pub type CMassLynxBaseProcessor = *mut c_void;
+
 #[allow(unused)]
 pub type CMassLynxRawWriter = *mut c_void;
+
 #[allow(unused)]
 pub type CMassLynxSampleList = *mut c_void;
+
 // void(__stdcall *ProgressCallBack)(void* pObject, const int& percent);
+
 pub type ProgressCallBack = Option<unsafe extern "stdcall" fn(*const c_void, *const c_int)>;
 
 #[link(name = "MassLynxRaw", kind = "static")]
 extern "stdcall" {
     pub fn releaseMemory(memory: *const c_void) -> c_int;
+
     pub fn getErrorMessage(nErrorCode: c_int, ppErrorMessage: *const *const c_char) -> c_int;
 
     pub fn getVersionInfo(ppVersion: *mut *const c_char) -> c_int;
@@ -50,11 +58,13 @@ extern "stdcall" {
 
     // Information reader
     pub fn getFunctionCount(mlInfoReader: CMassLynxBaseReader, pFunctions: *const c_uint) -> c_int;
+
     pub fn getScanCount(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
         pScans: *const c_uint,
     ) -> c_int;
+
     pub fn getAcquisitionMassRange(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -62,48 +72,57 @@ extern "stdcall" {
         lowMass: *const c_float,
         highMass: *const c_float,
     ) -> c_int;
+
     pub fn getAcquisitionTimeRange(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
         startTime: *const c_float,
         endTime: *const c_float,
     ) -> c_int;
+
     pub fn getFunctionType(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
         pFunctionType: *const MassLynxFunctionType,
     ) -> c_int;
+
     pub fn getFunctionTypeString(
         mlInfoReader: CMassLynxBaseReader,
         functionType: MassLynxFunctionType,
         chFunctionType: *const *const c_char,
     ) -> c_int;
+
     pub fn isContinuum(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
         bContinuum: *const c_char,
     ) -> c_int;
+
     pub fn getIonMode(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
         ionMode: *const MassLynxIonMode,
     ) -> c_int;
+
     pub fn getIonModeString(
         mlInfoReader: CMassLynxBaseReader,
         ionMode: MassLynxIonMode,
         chIonMode: *const *const c_char,
     ) -> c_int;
+
     pub fn getRetentionTime(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
         nWhichScan: c_int,
         fRT: *mut c_float,
     ) -> c_int;
+
     pub fn getDriftTime(
         mlInfoReader: CMassLynxBaseReader,
         nWhichDrift: c_int,
         fRT: *mut c_float,
     ) -> c_int;
+
     pub fn getDriftTime_CCS(
         mlInfoReader: CMassLynxBaseReader,
         ccs: c_float,
@@ -111,6 +130,7 @@ extern "stdcall" {
         charge: c_int,
         driftTime: *const c_float,
     ) -> c_int;
+
     pub fn getCollisionalCrossSection(
         mlInfoReader: CMassLynxBaseReader,
         driftTime: c_float,
@@ -118,27 +138,39 @@ extern "stdcall" {
         charge: c_int,
         fCCS: *mut c_float,
     ) -> c_int;
+
     pub fn getDriftScanCount(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
         pScans: *const c_uint,
     ) -> c_int;
+
     pub fn getMRMCount(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
         pMRMs: *mut c_int,
     ) -> c_int;
+
     pub fn isLockMassCorrected(
         mlInfoReader: CMassLynxBaseReader,
         pIsApplied: *const c_char,
     ) -> c_int;
+
     pub fn canLockMassCorrect(mlInfoReader: CMassLynxBaseReader, pCanApply: *const c_char)
         -> c_int;
+
     pub fn getLockMassFunction(
         mlRawReader: CMassLynxBaseReader,
         hasLockmass: *mut c_char,
         whichFunction: *mut c_int,
     ) -> c_int;
+
+    pub fn autoLockMassCorrect(
+        mlLockMassProcessor: CMassLynxBaseProcessor,
+        force: c_char,
+        pApplied: *mut c_char,
+    ) -> c_int;
+
     pub fn getIndexRange(
         mlRawReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -147,16 +179,19 @@ extern "stdcall" {
         pStartIndex: *const c_int,
         pEndIndex: *const c_int,
     ) -> c_int;
+
     pub fn getHeaderItemValue(
         mlRawReader: CMassLynxBaseReader,
         pItems: *const MassLynxHeaderItem,
         nItems: c_int,
         pParameters: CMassLynxParameters,
     ) -> c_int;
+
     pub fn getAcquisitionInfo(
         mlInfoReader: CMassLynxBaseReader,
         parameters: CMassLynxParameters,
     ) -> c_int;
+
     pub fn getScanItemValue(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -165,12 +200,14 @@ extern "stdcall" {
         nItems: c_int,
         pParameters: CMassLynxParameters,
     ) -> c_int;
+
     pub fn getScanItemName(
         mlInfoReader: CMassLynxBaseReader,
         pItems: *const MassLynxScanItem,
         nItems: c_int,
         pParameters: CMassLynxParameters,
     ) -> c_int;
+
     pub fn getScanItemsInFunction(
         mlInfoReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -186,6 +223,7 @@ extern "stdcall" {
         ppIntensities: *const *const c_float,
         pSize: *const c_int,
     ) -> c_int;
+
     pub fn readScanFlags(
         mlRawScanreader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -195,6 +233,7 @@ extern "stdcall" {
         pFlags: *const *const c_char,
         pSize: *const c_int,
     ) -> c_int;
+
     pub fn readDriftScan(
         mlRawScanreader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -204,6 +243,7 @@ extern "stdcall" {
         ppIntensities: *const *const c_float,
         pSize: *const c_int,
     ) -> c_int;
+
     pub fn readDaughterScan(
         mlRawScanreader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -214,6 +254,7 @@ extern "stdcall" {
         pSize: *const c_int,
         pProductSize: *const c_int,
     ) -> c_int;
+
     pub fn readDriftScanIndex(
         mlRawScanreader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -223,6 +264,7 @@ extern "stdcall" {
         ppIntensities: *const *const c_float,
         pSize: *const c_int,
     ) -> c_int;
+
     pub fn readDriftScanFlagsIndex(
         mlRawScanreader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -233,6 +275,7 @@ extern "stdcall" {
         pFlags: *const *const c_char,
         pSize: *const c_int,
     ) -> c_int;
+
     pub fn getDriftMassScale(
         mlRawScanreader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -243,21 +286,26 @@ extern "stdcall" {
     ) -> c_int;
 
     pub fn createParameters(mlParameters: *const CMassLynxParameters) -> c_int;
+
     pub fn createParametersFromParameters(
         mlSourceParameters: CMassLynxParameters,
         mlParameters: *mut CMassLynxParameters,
     ) -> c_int;
+
     pub fn destroyParameters(mlParameters: CMassLynxParameters) -> c_int;
+
     pub fn setParameterValue(
         mlParameters: CMassLynxParameters,
         nKey: c_int,
         pValue: *const c_char,
     ) -> c_int;
+
     pub fn getParameterValue(
         mlParameters: CMassLynxParameters,
         nKey: c_int,
         ppValue: *const *const c_char,
     ) -> c_int;
+
     pub fn getParameterKeys(
         mlParameters: CMassLynxParameters,
         ppKeys: *const *const c_int,
@@ -292,6 +340,7 @@ extern "stdcall" {
         bDaughters: c_char,
         pSize: *const c_int,
     ) -> c_int;
+
     pub fn readSonarMassChromatogram(
         mlChromatogramReader: CMassLynxBaseReader,
         nWhichFunction: c_int,
@@ -333,17 +382,22 @@ extern "stdcall" {
         pCallback: ProgressCallBack,
         pCaller: *const c_void,
     ) -> c_int;
+
     pub fn destroyRawProcessor(mlRawProcessor: CMassLynxBaseProcessor) -> c_int;
+
     pub fn getProcessorMessage(
         mlRawProcessor: CMassLynxBaseProcessor,
         nCode: c_int,
         ppMessage: *const *const c_char,
     ) -> c_int;
+
     pub fn setRawReader(
         mlRawProcessor: CMassLynxBaseProcessor,
         mlRawReader: CMassLynxBaseReader,
     ) -> c_int;
+
     pub fn setRawPath(mlRawProcessor: CMassLynxBaseProcessor, path: *const c_char) -> c_int;
+
     pub fn setProcessorCallBack(
         mlRawProcessor: CMassLynxBaseProcessor,
         pCallback: ProgressCallBack,
@@ -355,21 +409,26 @@ extern "stdcall" {
         mlLockMassProcessor: CMassLynxBaseProcessor,
         pParameters: CMassLynxParameters,
     ) -> c_int;
+
     pub fn getLockMassParameter(
         mlLockMassProcessor: CMassLynxBaseProcessor,
         ppParameters: *const *const c_char,
     ) -> c_int;
+
     pub fn lockMassCorrect(
         mlLockMassProcessor: CMassLynxBaseProcessor,
         pApplied: *const c_char,
     ) -> c_int;
+
     pub fn removeLockMassCorrection(mlLockMassProcessor: CMassLynxBaseProcessor) -> c_int;
+
     pub fn getLockMassCandidates(
         mlLockMassProcessor: CMassLynxBaseProcessor,
         ppMasses: *const *const c_float,
         ppIntensities: *const *const c_float,
         nSize: *const c_int,
     ) -> c_int;
+
     pub fn LMP_isLockMassCorrected(
         mlLockMassProcessor: CMassLynxBaseProcessor,
         applied: *const c_int,
@@ -388,6 +447,7 @@ extern "stdcall" {
 
     // Analog reader functions
     pub fn getChannelCount(mlAnalogReader: CMassLynxBaseReader, nChannels: *mut c_int) -> c_int;
+
     pub fn readChannel(
         mlAnalogReader: CMassLynxBaseReader,
         nWhichChannel: c_int,
@@ -395,11 +455,13 @@ extern "stdcall" {
         pIntensities: *const *const c_float,
         pSize: *mut c_int,
     ) -> c_int;
+
     pub fn getChannelDesciption(
         mlAnalogReader: CMassLynxBaseReader,
         nWhichChannel: c_int,
         ppDescription: *const *const c_char,
     ) -> c_int;
+
     pub fn getChannelUnits(
         mlAnalogReader: CMassLynxBaseReader,
         nWhichChannel: c_int,
@@ -413,6 +475,7 @@ extern "stdcall" {
         ppIntensities: *const *const c_float,
         nSize: *mut c_int,
     ) -> c_int;
+
     pub fn setScan(
         mlScanProcessor: CMassLynxBaseProcessor,
         pMasses: *const c_float,
@@ -428,6 +491,7 @@ extern "stdcall" {
         startScan: c_int,
         endScan: c_int,
     ) -> c_int;
+
     pub fn combineDriftScan(
         mlSpectrumProcessor: CMassLynxBaseProcessor,
         whichFunction: c_int,
@@ -439,10 +503,12 @@ extern "stdcall" {
 
     // smooth
     pub fn smoothScan(mlScanProcessor: CMassLynxBaseProcessor) -> c_int;
+
     pub fn setSmoothParameter(
         mlScanProcessor: CMassLynxBaseProcessor,
         pParameters: CMassLynxParameters,
     ) -> c_int;
+
     pub fn getSmoothParameter(
         mlScanProcessor: CMassLynxBaseProcessor,
         parameters: CMassLynxParameters,
@@ -450,10 +516,12 @@ extern "stdcall" {
 
     // centroid
     pub fn centroidScan(mlScanProcessor: CMassLynxBaseProcessor) -> c_int;
+
     pub fn setCentroidParameter(
         mlScanProcessor: CMassLynxBaseProcessor,
         parameters: CMassLynxParameters,
     ) -> c_int;
+
     pub fn getCentroidParameter(
         mlScanProcessor: CMassLynxBaseProcessor,
         parameters: CMassLynxParameters,
@@ -461,8 +529,10 @@ extern "stdcall" {
 
     // theshold
     pub fn thresholdScan(mlScanProcessor: CMassLynxBaseProcessor) -> c_int;
+
     pub fn setThresholdParameter(
         mlScanProcessor: CMassLynxBaseProcessor,
         pParameters: CMassLynxParameters,
     ) -> c_int;
+
 }

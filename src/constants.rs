@@ -90,6 +90,15 @@ pub enum MassLynxIonMode {
     UNINITIALISED = ION_MODE_BASE + 99,
 }
 
+impl MassLynxIonMode {
+    pub fn is_positive(&self) -> bool {
+        match self {
+            Self::EI_POS | Self::AI_POS | Self::CI_POS | Self::TS_POS | Self::LD_POS | Self::FB_POS => true,
+            _ => false
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum MassLynxFunctionType { // ProteoWizard classifications

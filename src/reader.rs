@@ -179,6 +179,7 @@ pub struct ScanFunction {
     pub ion_mobility_block_size: usize,
     pub scan_count: usize,
     pub scan_items: Vec<MassLynxScanItem>,
+    pub scan_range: Option<(f64, f64)>
 }
 
 impl ScanFunction {
@@ -190,6 +191,7 @@ impl ScanFunction {
         scan_count: usize,
         ms_level: u8,
         scan_items: Vec<MassLynxScanItem>,
+        scan_range: Option<(f64, f64)>
     ) -> Self {
         Self {
             function,
@@ -199,6 +201,7 @@ impl ScanFunction {
             scan_count,
             ms_level,
             scan_items,
+            scan_range
         }
     }
 
@@ -256,7 +259,8 @@ pub struct MassLynxReader {
 }
 
 impl MassLynxReader {
-    pub fn from_path(path: &str) -> MassLynxResult<Self> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> MassLynxResult<Self> {
+        let path = path.as_ref();
         let info_reader = MassLynxInfoReader::from_path(&path)?;
         let scan_reader = MassLynxScanReader::from_source(&info_reader)?;
         let chromatogram_reader = MassLynxChromatogramReader::from_source(&info_reader)?;
@@ -314,6 +318,7 @@ impl MassLynxReader {
             let ms_level = self.translate_function_type_to_ms_level(fnum)?;
 
             let scan_items = self.info_reader.get_scan_items(fnum)?.iter_keys().collect();
+            let scan_range = self.info_reader.get_acquisition_mass_range(fnum).ok();
 
             let descr = ScanFunction::new(
                 fnum,
@@ -323,6 +328,7 @@ impl MassLynxReader {
                 scan_count,
                 ms_level,
                 scan_items,
+                scan_range,
             );
             functions.push(descr);
         }

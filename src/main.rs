@@ -93,7 +93,7 @@ fn show_tic(reader: &mut MassLynxReader) -> MassLynxResult<()> {
 #[allow(unused)]
 fn show_analog(reader: &mut MassLynxReader) -> MassLynxResult<()> {
     for trace in reader.iter_analogs() {
-        eprintln!("{} {}: {}", trace.name, trace.unit, trace.time.len());
+        eprintln!("{} | {} | {:?}: {}", trace.name, trace.unit, trace.unit.as_bytes(), trace.time.len());
     }
     Ok(())
 }
@@ -122,8 +122,9 @@ fn main() -> Result<(), MassLynxError> {
     eprintln!("Opened reader with {} spectra", reader.len());
 
     eprintln!("{:?}", reader.header_items().unwrap());
+    eprintln!("{:?}", reader.acquisition_information().unwrap());
     show_ms_level_counts(&mut reader);
-    // show_analog(&mut reader)?;
+    show_analog(&mut reader)?;
     // show_spectrum(&mut reader);
     // show_cycle(&mut reader);
     show_chromatogram(&mut reader);
