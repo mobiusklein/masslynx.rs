@@ -168,6 +168,10 @@ impl RawPaths {
     fn path(&self) -> &PathBuf {
         &self.base_path
     }
+
+    fn has_file(&self, name: &str) -> bool {
+        self.base_path.join(name).exists()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -616,6 +620,18 @@ impl MassLynxReader {
 
     pub fn set_lockmass_skipping(&mut self, skip_lockmass: bool) {
         self.scan_reading_options.set_skip_lockmass(skip_lockmass)
+    }
+
+    pub fn get_ccs(&self, drift_time: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+        self.info_reader.get_ccs(drift_time, mz, charge)
+    }
+
+    pub fn get_drift_time_from_ccs(&self, ccs: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+        self.info_reader.get_drift_time_from_ccs(ccs, mz, charge)
+    }
+
+    pub fn has_ccs_calibration(&self) -> bool {
+        self.path.has_file("mob_cal.csv")
     }
 }
 

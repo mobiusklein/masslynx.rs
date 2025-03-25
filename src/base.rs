@@ -501,6 +501,26 @@ impl MassLynxInfoReader {
         Ok(out as f64)
     }
 
+    pub fn get_ccs(&self, drift_time: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+        let mut out = 0.0;
+
+        fficall!({
+            ffi::getCollisionalCrossSection(self.0, drift_time, mz, charge, &mut out)
+        });
+
+        Ok(out)
+    }
+
+    pub fn get_drift_time_from_ccs(&self, ccs: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+        let mut out = 0.0;
+
+        fficall!({
+            ffi::getDriftTime_CCS(self.0, ccs, mz, charge, &mut out)
+        });
+
+        Ok(out)
+    }
+
     pub fn get_acquisition_mass_range(&self, which_function: usize) -> MassLynxResult<(f64, f64)> {
         let low: c_float = 0.0;
         let high: c_float = 0.0;

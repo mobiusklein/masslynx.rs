@@ -26,7 +26,7 @@ use mzdata::io::checksum_file;
 
 use masslynx::{
     reader::{MassLynxReader, ScanFunction, Spectrum, Trace},
-    MassLynxHeaderItem,
+    MassLynxHeaderItem, MassLynxResult,
 };
 
 fn build_file_description(reader: &MassLynxReader) -> io::Result<FileDescription> {
@@ -774,6 +774,38 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
 
         Some(frame)
     }
+
+    pub fn get_lock_mass_function(&self) -> Option<usize> {
+        self.reader.get_lock_mass_function()
+    }
+
+    pub fn get_lockmass_skipping(&self) -> bool {
+        self.reader.get_lockmass_skipping()
+    }
+
+    pub fn set_lock_mass(&mut self, mass: f32, tolerance: Option<f32>) -> MassLynxResult<()> {
+        self.reader.set_lock_mass(mass, tolerance)
+    }
+
+    pub fn set_lockmass_skipping(&mut self, skip_lockmass: bool) {
+        self.reader.set_lockmass_skipping(skip_lockmass)
+    }
+
+    pub fn is_lock_mass_corrected(&mut self) -> bool {
+        self.reader.is_lock_mass_corrected()
+    }
+
+    pub fn get_ccs(&self, drift_time: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+        self.reader.get_ccs(drift_time, mz, charge)
+    }
+
+    pub fn get_drift_time_from_ccs(&self, ccs: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+        self.reader.get_drift_time_from_ccs(ccs, mz, charge)
+    }
+
+    pub fn has_ccs_calibration(&self) -> bool {
+        self.reader.has_ccs_calibration()
+    }
 }
 
 pub struct MassLynxSpectrumReaderType<
@@ -1101,6 +1133,38 @@ impl<
         };
 
         Some(MultiLayerSpectrum::new(desc, arrays, None, None))
+    }
+
+    pub fn get_ccs(&self, drift_time: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+        self.inner.get_ccs(drift_time, mz, charge)
+    }
+
+    pub fn get_drift_time_from_ccs(&self, ccs: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+        self.inner.get_drift_time_from_ccs(ccs, mz, charge)
+    }
+
+    pub fn has_ccs_calibration(&self) -> bool {
+        self.inner.has_ccs_calibration()
+    }
+
+    pub fn get_lock_mass_function(&self) -> Option<usize> {
+        self.inner.get_lock_mass_function()
+    }
+
+    pub fn get_lockmass_skipping(&self) -> bool {
+        self.inner.get_lockmass_skipping()
+    }
+
+    pub fn set_lock_mass(&mut self, mass: f32, tolerance: Option<f32>) -> MassLynxResult<()> {
+        self.inner.set_lock_mass(mass, tolerance)
+    }
+
+    pub fn set_lockmass_skipping(&mut self, skip_lockmass: bool) {
+        self.inner.set_lockmass_skipping(skip_lockmass)
+    }
+
+    pub fn is_lock_mass_corrected(&mut self) -> bool {
+        self.inner.is_lock_mass_corrected()
     }
 }
 
