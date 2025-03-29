@@ -90,11 +90,53 @@ fn build_file_description(reader: &MassLynxReader) -> io::Result<FileDescription
     Ok(desc)
 }
 
+
+macro_rules! lock_mass_methods {
+    () => {
+        pub fn get_lock_mass_function(&self) -> Option<usize> {
+            self.inner.get_lock_mass_function()
+        }
+
+        pub fn get_lockmass_skipping(&self) -> bool {
+            self.inner.get_lockmass_skipping()
+        }
+
+        pub fn set_lock_mass(&mut self, mass: f32, tolerance: Option<f32>) -> MassLynxResult<()> {
+            self.inner.set_lock_mass(mass, tolerance)
+        }
+
+        pub fn set_lockmass_skipping(&mut self, skip_lockmass: bool) {
+            self.inner.set_lockmass_skipping(skip_lockmass)
+        }
+
+        pub fn is_lock_mass_corrected(&mut self) -> bool {
+            self.inner.is_lock_mass_corrected()
+        }
+    };
+}
+
+macro_rules! ccs_methods {
+    () => {
+        pub fn get_ccs(&self, drift_time: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+            self.inner.get_ccs(drift_time, mz, charge)
+        }
+
+        pub fn get_drift_time_from_ccs(&self, ccs: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
+            self.inner.get_drift_time_from_ccs(ccs, mz, charge)
+        }
+
+        pub fn has_ccs_calibration(&self) -> bool {
+            self.inner.has_ccs_calibration()
+        }
+    };
+}
+
+
 pub struct MassLynxCycleReaderType<
     C: FeatureLike<MZ, IonMobility>,
     D: FeatureLike<Mass, IonMobility> + KnownCharge,
 > {
-    reader: MassLynxReader,
+    inner: MassLynxReader,
     index: usize,
     frame_index: OffsetIndex,
     detail_level: DetailLevel,
@@ -110,7 +152,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             "TIC" => self.get_chromatogram(0),
             "BPC" => self.get_chromatogram(1),
             _ => {
-                let trace = self.reader.iter_analogs().find(|t| t.name == id)?;
+                let trace = self.inner.iter_analogs().find(|t| t.name == id)?;
                 Some(self.trace_to_chromatogram(&trace))
             }
         }
@@ -190,14 +232,14 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         self.detail_level = detail_level;
         match self.detail_level {
             DetailLevel::Full => {
-                self.reader.set_signal_loading(true);
+                self.inner.set_signal_loading(true);
             }
             DetailLevel::Lazy => {
                 self.detail_level = DetailLevel::Full;
-                self.reader.set_signal_loading(true);
+                self.inner.set_signal_loading(true);
             }
             DetailLevel::MetadataOnly => {
-                self.reader.set_signal_loading(false);
+                self.inner.set_signal_loading(false);
             }
         }
     }
@@ -357,7 +399,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         metadata.softwares_mut().push(sw);
 
         Ok(Self {
-            reader,
+            inner: reader,
             index: 0,
             frame_index,
             metadata,
@@ -367,15 +409,15 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 
     pub fn len(&self) -> usize {
-        self.reader.cycle_index().len()
+        self.inner.cycle_index().len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.reader.cycle_index().is_empty()
+        self.inner.cycle_index().is_empty()
     }
 
     pub(crate) fn get_tic(&mut self) -> Option<Chromatogram> {
-        let (times, intensities) = self.reader.tic().ok()?;
+        let (times, intensities) = self.inner.tic().ok()?;
         let mut time_array = DataArray::from_name_type_size(
             &ArrayType::TimeArray,
             BinaryDataArrayType::Float64,
@@ -406,7 +448,7 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     }
 
     pub(crate) fn get_bpc(&mut self) -> Option<Chromatogram> {
-        let (times, intensities) = self.reader.bpi().ok()?;
+        let (times, intensities) = self.inner.bpi().ok()?;
         let mut time_array = DataArray::from_name_type_size(
             &ArrayType::TimeArray,
             BinaryDataArrayType::Float64,
@@ -469,21 +511,20 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
             "C" => {
                 desc.chromatogram_type = ChromatogramType::TemperatureChromatogram;
                 intensity_array.name = ArrayType::TemperatureArray;
-                // TODO: update units
+                intensity_array.unit = Unit::Celsius;
             }
             "L/min" => {
                 desc.chromatogram_type = ChromatogramType::FlowRateChromatogram;
                 intensity_array.name = ArrayType::FlowRateArray;
-                // TODO: update units
+                intensity_array.unit = Unit::MicrolitersPerMinute;
             }
             "psi" => {
                 desc.chromatogram_type = ChromatogramType::PressureChromatogram;
                 intensity_array.name = ArrayType::PressureArray;
-                // TODO: update units
+                intensity_array.unit = Unit::Psi;
             }
             "%" => {
-
-                // intensity_array.unit = Unit::Percent
+                intensity_array.unit = Unit::Percent
             }
             _ => {
                 desc.chromatogram_type = ChromatogramType::Unknown;
@@ -504,14 +545,14 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         } else if index == 1 {
             self.get_bpc()
         } else {
-            let trace: Trace = self.reader.get_analog_trace(index - 2)?;
+            let trace: Trace = self.inner.get_analog_trace(index - 2)?;
             Some(self.trace_to_chromatogram(&trace))
         }
     }
 
     pub(crate) fn get_frame(&mut self, index: usize) -> Option<MultiLayerIonMobilityFrame<C, D>> {
-        let cycle = self.reader.get_cycle(index)?;
-        let func: &ScanFunction = &self.reader.functions()[cycle.function()];
+        let cycle = self.inner.get_cycle(index)?;
+        let func: &ScanFunction = &self.inner.functions()[cycle.function()];
         let id = cycle.native_id();
         let ms_level = func.ms_level;
 
@@ -775,37 +816,8 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
         Some(frame)
     }
 
-    pub fn get_lock_mass_function(&self) -> Option<usize> {
-        self.reader.get_lock_mass_function()
-    }
-
-    pub fn get_lockmass_skipping(&self) -> bool {
-        self.reader.get_lockmass_skipping()
-    }
-
-    pub fn set_lock_mass(&mut self, mass: f32, tolerance: Option<f32>) -> MassLynxResult<()> {
-        self.reader.set_lock_mass(mass, tolerance)
-    }
-
-    pub fn set_lockmass_skipping(&mut self, skip_lockmass: bool) {
-        self.reader.set_lockmass_skipping(skip_lockmass)
-    }
-
-    pub fn is_lock_mass_corrected(&mut self) -> bool {
-        self.reader.is_lock_mass_corrected()
-    }
-
-    pub fn get_ccs(&self, drift_time: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
-        self.reader.get_ccs(drift_time, mz, charge)
-    }
-
-    pub fn get_drift_time_from_ccs(&self, ccs: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
-        self.reader.get_drift_time_from_ccs(ccs, mz, charge)
-    }
-
-    pub fn has_ccs_calibration(&self) -> bool {
-        self.reader.has_ccs_calibration()
-    }
+    lock_mass_methods!();
+    ccs_methods!();
 }
 
 pub struct MassLynxSpectrumReaderType<
@@ -891,7 +903,7 @@ impl<
 {
     fn build_index(&mut self) {
         self.inner
-            .reader
+            .inner
             .index()
             .iter()
             .enumerate()
@@ -913,7 +925,7 @@ impl<
     }
 
     fn get_spectrum(&mut self, index: usize) -> Option<MultiLayerSpectrum<C, D>> {
-        let spec: Spectrum = self.inner.reader.get_spectrum(index)?;
+        let spec: Spectrum = self.inner.inner.get_spectrum(index)?;
         let mut desc = SpectrumDescription::default();
 
         desc.id = spec.native_id();
@@ -931,7 +943,7 @@ impl<
             ScanPolarity::Negative
         };
 
-        let func = &self.inner.reader.functions()[spec.function()];
+        let func = &self.inner.inner.functions()[spec.function()];
         let scan = desc.acquisition.first_scan_mut().unwrap();
         scan.start_time = spec.time;
         scan.add_param(
@@ -1135,37 +1147,8 @@ impl<
         Some(MultiLayerSpectrum::new(desc, arrays, None, None))
     }
 
-    pub fn get_ccs(&self, drift_time: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
-        self.inner.get_ccs(drift_time, mz, charge)
-    }
-
-    pub fn get_drift_time_from_ccs(&self, ccs: f32, mz: f32, charge: i32) -> MassLynxResult<f32> {
-        self.inner.get_drift_time_from_ccs(ccs, mz, charge)
-    }
-
-    pub fn has_ccs_calibration(&self) -> bool {
-        self.inner.has_ccs_calibration()
-    }
-
-    pub fn get_lock_mass_function(&self) -> Option<usize> {
-        self.inner.get_lock_mass_function()
-    }
-
-    pub fn get_lockmass_skipping(&self) -> bool {
-        self.inner.get_lockmass_skipping()
-    }
-
-    pub fn set_lock_mass(&mut self, mass: f32, tolerance: Option<f32>) -> MassLynxResult<()> {
-        self.inner.set_lock_mass(mass, tolerance)
-    }
-
-    pub fn set_lockmass_skipping(&mut self, skip_lockmass: bool) {
-        self.inner.set_lockmass_skipping(skip_lockmass)
-    }
-
-    pub fn is_lock_mass_corrected(&mut self) -> bool {
-        self.inner.is_lock_mass_corrected()
-    }
+    lock_mass_methods!();
+    ccs_methods!();
 }
 
 impl<
@@ -1189,7 +1172,7 @@ impl<
 
     fn get_spectrum_by_id(&mut self, id: &str) -> Option<MultiLayerSpectrum<C, D>> {
         let offset = self.spectrum_index.get(id)?;
-        let spec = self.inner.reader.get_spectrum(offset as usize)?;
+        let spec = self.inner.inner.get_spectrum(offset as usize)?;
         let mut desc = SpectrumDescription::default();
 
         desc.id = spec.native_id();
