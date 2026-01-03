@@ -7,9 +7,8 @@ Waters Corporation.
 
 This library is only available for Windows. Waters does not provide libraries for other platforms.
 
-To build this library, you must obtain a copy of the relevant C library from Waters. The `MassLynxRaw.lib`
-file should be on your linker's include path. For convenience, the `build.rs` script will put `./lib` on
-the path automatically.
+To use this library, you must obtain a copy of the relevant C library from Waters. The `MassLynxRaw.dll`
+file and `cdt.dll` must be resolvable for dynamic linking.
 
 ## Usage
 

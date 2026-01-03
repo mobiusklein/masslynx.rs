@@ -378,6 +378,10 @@ impl MassLynxReader {
         Ok(())
     }
 
+    pub fn auto_lock_mass_correct(&mut self, force: bool) -> Result<bool, MassLynxError> {
+        self.lockmass_processor.auto_lock_mass_correct(force)
+    }
+
     fn augment_function_error(&self, mut error: MassLynxError) -> MassLynxError {
         if error.error_code == 14 {
             let f: Vec<_> = self

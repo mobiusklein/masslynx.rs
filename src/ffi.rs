@@ -31,10 +31,10 @@ pub type CMassLynxSampleList = *mut c_void;
 
 // void(__stdcall *ProgressCallBack)(void* pObject, const int& percent);
 
-pub type ProgressCallBack = Option<unsafe extern "stdcall" fn(*const c_void, *const c_int)>;
+pub type ProgressCallBack = Option<unsafe extern "system" fn(*const c_void, *const c_int)>;
 
-#[link(name = "MassLynxRaw", kind = "static")]
-extern "stdcall" {
+#[link(name = "MassLynxRaw", kind = "dylib")]
+extern "system" {
     pub fn releaseMemory(memory: *const c_void) -> c_int;
 
     pub fn getErrorMessage(nErrorCode: c_int, ppErrorMessage: *const *const c_char) -> c_int;
