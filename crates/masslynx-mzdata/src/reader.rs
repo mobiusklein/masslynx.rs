@@ -161,6 +161,10 @@ impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownC
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
         self.get_chromatogram(index)
     }
+
+    fn count_chromatograms(&self) -> usize {
+        self.inner.analog_trace_count() + 2
+    }
 }
 
 impl<C: FeatureLike<MZ, IonMobility>, D: FeatureLike<Mass, IonMobility> + KnownCharge>
@@ -846,6 +850,10 @@ impl<
     fn get_chromatogram_by_index(&mut self, index: usize) -> Option<Chromatogram> {
         self.inner.get_chromatogram_by_index(index)
     }
+
+    fn count_chromatograms(&self) -> usize {
+        self.inner.count_chromatograms()
+    }
 }
 
 impl<
@@ -1115,7 +1123,7 @@ impl<
             precursor.get_or_insert_default().activation = activation;
         }
 
-        desc.precursor = precursor;
+        desc.precursor = precursor.into_iter().collect();
 
         let arrays = if !matches!(self.inner.detail_level(), DetailLevel::MetadataOnly) {
             let mut mz_array = DataArray::from_name_type_size(
